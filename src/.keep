@@ -1,0 +1,61 @@
+// sign_mag_adder.sv
+// Комбинационный сумматор для чисел в формате знак-модуль (sign-magnitude).
+// Параметр SIZE задаёт полную разрядность (включая знак).
+// Выходной ноль всегда нормализован к +0 (знаковый бит = 0).
+
+module sign_mag_adder #(parameter SIZE = 4) (
+    input  logic [SIZE-1:0] a,          // первое слагаемое
+    input  logic [SIZE-1:0] b,          // второе слагаемое
+    output logic [SIZE-1:0] s,          // сумма (знак-модуль)
+    output logic            overflow    // флаг переполнения
+);
+
+    // выделение знака и модуля
+    logic        sign_a, sign_b;
+    logic [SIZE-2:0] mag_a, mag_b;
+
+    assign sign_a = a[SIZE-1];
+    assign sign_b = b[SIZE-1];
+    assign mag_a  = a[SIZE-2:0];
+    assign mag_b  = b[SIZE-2:0];
+
+    // промежуточные сигналы
+    logic [SIZE-2:0] mag_res;
+    logic        sign_res;
+    logic        ovf;
+
+    always_comb begin
+        if (sign_a == sign_b) begin
+            // одинаковые знаки: складываем модули с расширением
+            logic [SIZE-1:0] sum_ext;   // на 1 бит шире модуля (SIZE бит всего)
+            // явное расширение модулей нулём в старшем разряде
+            sum_ext = {1'b0, mag_a} + {1'b0, mag_b};
+            ovf = sum_ext[SIZE-1];       // старший бит - перенос
+            mag_res = sum_ext[SIZE-2:0]; // младшие SIZE-1 бит
+            sign_res = sign_a;
+        end else begin
+            // разные знаки: вычитаем меньший модуль из большего
+            if (mag_a > mag_b) begin
+                mag_res = mag_a - mag_b;
+                sign_res = sign_a;
+            end else if (mag_b > mag_a) begin
+                mag_res = mag_b - mag_a;
+                sign_res = sign_b;
+            end else begin
+                // модули равны -> результат 0
+                mag_res = '0;
+                sign_res = 1'b0;   // будет нормализован ниже
+            end
+            ovf = 1'b0;   // переполнение невозможно при разных знаках
+        end
+
+        // нормализация нуля: если модуль равен нулю, знак должен быть 0
+        if (mag_res == 0)
+            s = {1'b0, {(SIZE-1){1'b0}}};
+        else
+            s = {sign_res, mag_res};
+
+        overflow = ovf;
+    end
+
+endmodule
