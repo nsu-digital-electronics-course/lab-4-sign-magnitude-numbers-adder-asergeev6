@@ -1,0 +1,96 @@
+// tb_sign_mag_adder.sv
+// Тестбенч с 10 выбранными тестами для проверки сумматора sign-magnitude (SIZE=4)
+// Подробный вывод для каждого теста.
+
+module tb_sign_mag_adder;
+
+    localparam SIZE = 4;
+    localparam NUM_TESTS = 10;
+
+    // Структура для тестового вектора
+    typedef struct {
+        logic [SIZE-1:0] a;
+        logic [SIZE-1:0] b;
+        logic [SIZE-1:0] s_exp;
+        logic            ovf_exp;
+        string           desc;  // описание теста
+    } test_t;
+
+    // Массив тестов
+    test_t tests [0:NUM_TESTS-1] = '{
+        '{a: 4'b0011, b: 4'b0010, s_exp: 4'b0101, ovf_exp: 0, desc: "positive + positive (3+2=5)"},
+        '{a: 4'b0111, b: 4'b0001, s_exp: 4'b0000, ovf_exp: 1, desc: "positive + positive overflow (7+1 -> overflow)"},
+        '{a: 4'b1011, b: 4'b1010, s_exp: 4'b1101, ovf_exp: 0, desc: "negative + negative (-3 + -2 = -5)"},
+        '{a: 4'b1111, b: 4'b1001, s_exp: 4'b0000, ovf_exp: 1, desc: "negative + negative overflow (-7 + -1 -> overflow)"},
+        '{a: 4'b0101, b: 4'b1010, s_exp: 4'b0011, ovf_exp: 0, desc: "positive + negative (5 + -2 = 3)"},
+        '{a: 4'b0010, b: 4'b1101, s_exp: 4'b1011, ovf_exp: 0, desc: "positive + negative (2 + -5 = -3)"},
+        '{a: 4'b0100, b: 4'b1100, s_exp: 4'b0000, ovf_exp: 0, desc: "equal magnitude opposite sign (4 + -4 = 0)"},
+        '{a: 4'b0000, b: 4'b0011, s_exp: 4'b0011, ovf_exp: 0, desc: "zero + positive (0+3=3)"},
+        '{a: 4'b1000, b: 4'b0000, s_exp: 4'b0000, ovf_exp: 0, desc: "negative zero + positive zero (should normalize to +0)"},
+        '{a: 4'b1000, b: 4'b1011, s_exp: 4'b1011, ovf_exp: 0, desc: "negative zero + negative (-0 + -3 = -3)"}
+    };
+
+    // Сигналы для DUT
+    logic [SIZE-1:0] a, b;
+    logic [SIZE-1:0] s;
+    logic            overflow;
+
+    // Инстанс модуля
+    sign_mag_adder #(.SIZE(SIZE)) dut (
+        .a(a),
+        .b(b),
+        .s(s),
+        .overflow(overflow)
+    );
+
+    int errors;
+    int test_num;
+
+    initial begin
+        errors = 0;
+        $display("============================================================");
+        $display("TESTBENCH for sign-magnitude adder (SIZE=%0d)", SIZE);
+        $display("============================================================\n");
+
+        for (test_num = 0; test_num < NUM_TESTS; test_num++) begin
+            // подаём входные воздействия
+            a = tests[test_num].a;
+            b = tests[test_num].b;
+
+            // ждём стабилизации схемы
+            #1;
+
+            // выводим информацию о тесте
+            $display("Test %0d: %s", test_num+1, tests[test_num].desc);
+            $display("  a = %b (sign=%b, mag=%b)", a, a[SIZE-1], a[SIZE-2:0]);
+            $display("  b = %b (sign=%b, mag=%b)", b, b[SIZE-1], b[SIZE-2:0]);
+            $display("  Expected: s = %b (sign=%b, mag=%b), overflow = %b",
+                     tests[test_num].s_exp,
+                     tests[test_num].s_exp[SIZE-1],
+                     tests[test_num].s_exp[SIZE-2:0],
+                     tests[test_num].ovf_exp);
+            $display("  Actual  : s = %b (sign=%b, mag=%b), overflow = %b",
+                     s, s[SIZE-1], s[SIZE-2:0], overflow);
+
+            // проверка
+            if (s !== tests[test_num].s_exp || overflow !== tests[test_num].ovf_exp) begin
+                $display("  >>> FAIL <<<");
+                errors++;
+            end else begin
+                $display("  >> OK <<");
+            end
+            $display("------------------------------------------------------------\n");
+        end
+
+        // итоговый отчёт
+        $display("============================================================");
+        $display("Tests completed: %0d tests, %0d errors", NUM_TESTS, errors);
+        if (errors == 0)
+            $display("All tests PASSED.");
+        else
+            $display("Some tests FAILED.");
+        $display("============================================================");
+        $finish;
+    end
+
+endmodule
